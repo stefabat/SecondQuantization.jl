@@ -4,126 +4,7 @@ import Base.+
 import Base.print
 import Base.eval
 
-
-"""Abstract type representing a second-quantized object"""
-abstract type SQObject end
-
-
-abstract type ElementaryOperator <: SQObject end
-
-
-"""Struct representing a multiplication object"""
-struct Mul <: SQObject
-  args::Vector{SQObject}
-  coef::Float64
-end
-
-function latex(mul::Mul)
-  coef = mul.coef
-  out = "$coef"
-  for arg in mul.args
-    out *= latex(arg)
-  end
-  return out
-end
-
-"""Default constructor with coefficient 1.0 for the Mul struct"""
-function Mul(args::Vector{SQObject})
-  return Mul(args, 1.0)
-end
-
-"""Default constructor with coefficient 1.0 for the Mul struct"""
-function Mul(args::Vector{ElementaryOperator})
-  return Mul(args, 1.0)
-end
-
-
-"""Struct representing an addition object"""
-struct Add <: SQObject
-  args::Vector{SQObject}
-end
-
-
-function latex(add::Add)
-  out = ""
-  for arg in add.args
-    out *= latex(arg) * " + "
-  end
-  return out
-end
-
-
-"""Struct representing the zero value"""
-struct Zero <: SQObject end
-
-function latex(zero::Zero)
-  return "0"
-end
-
-function *(obj1::SQObject, obj2::SQObject)
-  return Mul([obj1,obj2])
-end
-
-function *(obj::SQObject, zero::Zero)
-  return Zero()
-end
-
-function *(zero::Zero, obj::SQObject)
-  return Zero()
-end
-
-function *(obj::SQObject, mul::Mul)
-  return Mul(vcat(obj,mul.args), mul.coef)
-end
-
-function *(mul::Mul, obj::SQObject)
-  return Mul(vcat(mul.args,obj), mul.coef)
-end
-
-function *(num::Number, mul::Mul)
-  return Mul(mul.args, num*mul.coef)
-end
-
-function *(mul::Mul, num::Number)
-  return Mul(mul.args, num*mul.coef)
-end
-
-function *(num::Number, obj::SQObject)
-  return Mul([obj], num)
-end
-
-function *(obj::SQObject, num::Number)
-  return Mul([obj], num)
-end
-
-function *(mul1::Mul, mul2::Mul)
-  return Mul(vcat(mul1.args,mul2.args), mul1.coef*mul2.coef)
-end
-
-function +(obj1::SQObject, obj2::SQObject)
-  return Add([obj1,obj2])
-end
-
-function +(obj::SQObject, zero::Zero)
-  return obj
-end
-
-function +(zero::Zero, obj::SQObject)
-  return obj
-end
-
-function +(obj::SQObject, add::Add)
-  return Add(vcat(obj,add.args))
-end
-
-function +(add::Add, obj::SQObject)
-  return Add(vcat(add.args,obj))
-end
-
-function +(add1::Add, add2::Add)
-  return Add(vcat(add1.args,add2.args))
-end
-
+#### Orbital index ####
 
 """Struct representing an orbital index"""
 struct OrbitalIndex
@@ -131,33 +12,31 @@ struct OrbitalIndex
   class::String
 end
 
+get_index(orbind::OrbitalIndex) = orbind.index
+get_class(orbind::OrbitalIndex) = orbind.class
+
 """Returns `true` if the index represents an inactive orbital"""
-function is_inactive(index::OrbitalIndex)
-  return index.class == "inactive"
+function is_inactive(orbind::OrbitalIndex)
+  return get_class(orbind) == "inactive"
 end
 
 """Returns `true` if the index represents an active orbital"""
-function is_active(index::OrbitalIndex)
-  return index.class == "active"
+function is_active(orbind::OrbitalIndex)
+  return get_class(orbind) == "active"
 end
 
 """Returns `true` if the index represents a virtual orbital"""
-function is_virtual(index::OrbitalIndex)
-  return index.class == "virtual"
+function is_virtual(orbind::OrbitalIndex)
+  return get_class(orbind) == "virtual"
 end
 
+
+#### Creation operator ####
 
 """Struct representing a fermionic creation operator"""
-struct CreationOperator <: ElementaryOperator
+struct CreationOperator
   index::OrbitalIndex
 end
-
-
-function latex(op::CreationOperator)
-  index = string(op.index.index)
-  return "a^{\\dagger}_{$index}"
-end
-
 
 """Constructor of a creation operator"""
 function CreationOperator(p::Symbol)
@@ -183,40 +62,18 @@ function Fd(p::Symbol, class::String)
   return CreationOperator(OrbitalIndex(p,class))
 end
 
+"""Returns the latex code of a creation operator"""
+function latex(op::CreationOperator)
+  index = string(get_index(op))
+  return "a^{\\dagger}_{$index}"
+end
+
+
+#### Annihilation operator ####
 
 """Struct representing a fermionic annihilation operator"""
-struct AnnihilationOperator <: ElementaryOperator
+struct AnnihilationOperator
   index::OrbitalIndex
-end
-
-
-function latex(op::AnnihilationOperator)
-  index = string(op.index.index)
-  return "a_{$index}"
-end
-
-function is_general(op::ElementaryOperator)
-  return op.index.class == "general"
-end
-
-function is_inactive(op::ElementaryOperator)
-  return op.index.class == "inactive"
-end
-
-function is_active(op::ElementaryOperator)
-  return op.index.class == "active"
-end
-
-function is_virtual(op::ElementaryOperator)
-  return op.index.class == "virtual"
-end
-
-function is_hole(op::ElementaryOperator)
-  return is_inactive(op) || is_active(op)
-end
-
-function is_particle(op::ElementaryOperator)
-  return is_active(op) || is_virtual(op)
 end
 
 """Constructor of an annihilation operator"""
@@ -243,32 +100,137 @@ function F(p::Symbol, class::String)
   return AnnihilationOperator(OrbitalIndex(p,class))
 end
 
-
-
-"""Struct representing a normal-ordered string of operators"""
-struct NO <: SQObject
-  args::Vector{SQObject}
+function latex(op::AnnihilationOperator)
+  index = string(get_index(op))
+  return "a_{$index}"
 end
 
-#function NO(args::Vector{SQObject})
-#  return NO(args)
-#end
+"""Union type describing a Fermionic operator"""
+FermionicOperator = Union{CreationOperator,AnnihilationOperator}
 
-function latex(no::NO)
-  out = ""
-  for arg in NO.args
-    out *= latex(arg)
+get_index(op::FermionicOperator) = get_index(op.index)
+get_class(op::FermionicOperator) = get_class(op.index)
+
+
+#### functions on general elementary operators ####
+
+function is_general(op::FermionicOperator)
+  return get_class(op) == "general"
+end
+
+function is_inactive(op::FermionicOperator)
+  return get_class(op) == "inactive"
+end
+
+function is_active(op::FermionicOperator)
+  return get_class(op) == "active"
+end
+
+function is_virtual(op::FermionicOperator)
+  return get_class(op) == "virtual"
+end
+
+function is_hole(op::FermionicOperator)
+  return is_inactive(op) || is_active(op)
+end
+
+function is_particle(op::FermionicOperator)
+  return is_active(op) || is_virtual(op)
+end
+
+
+"""Struct representing a product of Fermionic operators"""
+mutable struct Product
+  coefficient::Float64
+  operators::Vector{FermionicOperator}
+end
+
+function Product(ops::Vector{FermionicOperator})
+  return Product(1.0, ops)
+end
+
+get_coefficient(product::Product) = product.coefficient
+get_operators(product::Product) = product.operators
+length(product::Product) = length(product.operators)
+
+function set_coefficient(product::Product, coefficient::Number)
+  product.coefficient = coefficient
+end
+
+function latex(product::Product)
+  coef = get_coefficient(product)
+  out = string(coef)
+  for op in get_operators(product)
+    out *= latex(op)
   end
-  return "\\lbrace"*out*"\\rbrace"
+  return out
 end
 
+#### Algebraic rules for Fermionic operators ####
+
+function *(op1::FermionicOperator, op2::FermionicOperator)
+  return Product([op1,op2])
+end
+
+function *(product::Product, op::FermionicOperator)
+  coef = get_coefficient(product)
+  ops  = get_operators(product)
+  return Product(coef,vcat(ops,op))
+end
+
+function *(op::FermionicOperator, product::Product)
+  coef = get_coefficient(product)
+  ops  = get_operators(product)
+  return Product(coef,vcat(op,ops))
+end
+
+function *(product1::Product, product2::Product)
+  coef = get_coefficient(product1) * get_coefficient(product2)
+  ops  = vcat(get_operators(product1),get_operators(product2))
+  return Product(coef,ops)
+end
+
+function *(x::Number, op::FermionicOperator)
+  return Product(x, [op])
+end
+
+function *(op::FermionicOperator, x::Number)
+  return Product(x, [op])
+end
+
+function *(product::Product, x::Number)
+  coef = x * get_coefficient(product)
+  ops  = get_operators(product)
+  return Product(coef,ops)
+end
+
+function *(x::Number, product::Product)
+  coef = x * get_coefficient(product)
+  ops  = get_operators(product)
+  return Product(coef,ops)
+end
+
+
+struct NO
+  product::Product
+end
+
+# function latex(no::NO)
+#   out = ""
+#   for arg in NO.args
+#     out *= latex(arg)
+#   end
+#   return "\\lbrace"*out*"\\rbrace"
+# end
+
+
+#### Kronecker delta function ####
 
 """Struct representing a Kronecker delta function"""
-struct KroneckerDelta <: SQObject
+struct KroneckerDelta
   upper::OrbitalIndex
   lower::OrbitalIndex
 end
-
 
 function latex(δ::KroneckerDelta)
   up = string(δ.upper.index)
@@ -276,30 +238,27 @@ function latex(δ::KroneckerDelta)
   return "\\delta_{$up$dw}"
 end
 
-
-
 """Constructor of Kronecker delta function"""
-function KroneckerDelta(op1::ElementaryOperator, op2::ElementaryOperator)
+function KroneckerDelta(op1::FermionicOperator, op2::FermionicOperator)
   return KroneckerDelta(op1.index,op2.index)
 end
 
 """Explicitly evaluate a Kronecker delta function"""
 function eval(δ::KroneckerDelta)
   if δ.upper.class == δ.lower.class
-    return δ
+    return 1.0
   else
-    return Zero()
+    return 0.0
   end
 end
 
 
 """Struct representing an antisymmetric tensor"""
-struct AntiSymmetricTensor <: SQObject
+struct AntiSymmetricTensor
   symbol::Symbol
   upper::Vector{OrbitalIndex}
   lower::Vector{OrbitalIndex}
 end
-
 
 function latex(ast::AntiSymmetricTensor)
   sym = string(ast.symbol)
@@ -315,39 +274,38 @@ function latex(ast::AntiSymmetricTensor)
 end
 
 
+# """Struct representing a commutator"""
+# struct Commutator <: SQObject
+#   A::SQObject
+#   B::SQObject
+# end
 
-"""Struct representing a commutator"""
-struct Commutator <: SQObject
-  A::SQObject
-  B::SQObject
-end
+# """Explicitly evaluate a commutator"""
+# function eval(comm::Commutator)
+#   return comm.args[1]*comm.args[2] + (-1.0)*comm.args[2]*comm.args[1]
+# end
 
-"""Explicitly evaluate a commutator"""
-function eval(comm::Commutator)
-  return comm.args[1]*comm.args[2] + (-1.0)*comm.args[2]*comm.args[1]
-end
+# """Struct representing a anticommutator"""
+# struct AntiCommutator <: SQObject
+#   A::SQObject
+#   B::SQObject
+# end
 
-"""Struct representing a anticommutator"""
-struct AntiCommutator <: SQObject
-  A::SQObject
-  B::SQObject
-end
+# function AntiCommutator(A::CreationOperator, B::CreationOperator)
+#   return Zero()
+# end
 
-function AntiCommutator(A::CreationOperator, B::CreationOperator)
-  return Zero()
-end
+# function AntiCommutator(A::AnnihilationOperator, B::AnnihilationOperator)
+#   return Zero()
+# end
 
-function AntiCommutator(A::AnnihilationOperator, B::AnnihilationOperator)
-  return Zero()
-end
-
-function AntiCommutator(A::CreationOperator, B::AnnihilationOperator)
-  return KroneckerDelta(A,B)
-end
+# function AntiCommutator(A::CreationOperator, B::AnnihilationOperator)
+#   return KroneckerDelta(A,B)
+# end
 
 
 """Struct representing a n-particle reduced density matrix"""
-struct Gamma <: SQObject
+struct Gamma
   upper::Vector{OrbitalIndex}
   lower::Vector{OrbitalIndex}
 end
@@ -365,7 +323,7 @@ function latex(γ::Gamma)
 end
 
 """Struct representing a n-hole reduced density matrix"""
-struct Eta <: SQObject
+struct Eta
   upper::Vector{OrbitalIndex}
   lower::Vector{OrbitalIndex}
 end
@@ -383,14 +341,21 @@ function latex(η::Eta)
 end
 
 
+
+"""Struct representing a contraction of Fermionic operators"""
+mutable struct Contraction
+  operators::Vector{FermionicOperator}
+end
+
+
 """Applies to quasi-operators"""
 function contraction(op1::CreationOperator, op2::CreationOperator)
-  return Zero()
+  return 0
 end
 
 """Applies to quasi-operators"""
 function contraction(op1::AnnihilationOperator, op2::AnnihilationOperator)
-  return Zero()
+  return 0
 end
 
 """Applies to quasi-operators"""
@@ -404,7 +369,7 @@ function contraction(op1::CreationOperator, op2::AnnihilationOperator)
     return Gamma([op1.index],[op2.index])
   end
   # all other cases are zero
-  return Zero()
+  return 0
 end
 
 
@@ -419,60 +384,48 @@ function contraction(op1::AnnihilationOperator, op2::CreationOperator)
     return Eta([op1.index],[op2.index])
   end
   # all other cases are zero
-  return Zero()
+  return 0
 end
 
 
 """Apply Wicks' theorem"""
-function wicks(op::ElementaryOperator)
+function wicks(op::FermionicOperator)
   return op
 end
 
 
 """Apply Wicks' theorem"""
-function wicks(normal_ordered_string::NO)
+function wicks(normal_ordered_string)
   return normal_ordered_string
 end
 
 
 """Apply Wicks' theorem"""
-function wicks(add::Add)
-  return Add([wicks(arg) for arg in add.args])
-end
-
-
-"""
-In theory, the mul object enetering here should only be composed by elementary
-operators.
-"""
-function wicks(mul::Mul)
+function wicks(product::Product)
   # vector containing all terms
-  result = SQObject[]
-  push!(result,NO(mul))
+  result = Product[]
+  push!(result,NO(product))
 
   # loop over all operators
-  for i=1:length(mul)-1
-    for j=i+1:length(mul)
+  for i=1:length(product.operators)-1
+    for j=i+1:length(product.operators)
 
       # compute contraction between the two Fermionic operators
-      contracted_pair = contraction(opstring[i],opstring[j])
+      contracted_pair = contraction(product.operators[i],product.operators[j])
 
-      # check that the contraction is non-zero
-      #if typeof(contracted_pair) != Zero
-        sign  = (-1.0)^((j - i + 1) % 2)
-        coeff = sign*contracted_pair
-      #end
+      sign  = (-1.0)^((j - i + 1) % 2)
+      coeff = sign*contracted_pair
 
       # remaining operators to get contractions from
-      # we exclude operators opstring[1:i-1] to avoid
+      # we exclude operators product[1:i-1] to avoid
       # double counting
-      oplist = vcat(opstring[i+1:j-1], opstring[j+1:end])
+      oplist = vcat(product.operators[i+1:j-1], product.operators[j+1:end])
 
       if length(oplist) > 0
-        push!(result,coeff*NO(opstring[1:i-1])*get_contractions(oplist))
+        push!(result,coeff*NO(product.operators[1:i-1])*wicks(oplist))
       else
-        if length(opstring[1:i-1]) > 0
-          push!(result,coeff*NO(opstring[1:i-1]))
+        if length(product.operators[1:i-1]) > 0
+          push!(result,coeff*NO(product.operators[1:i-1]))
         else
           push!(result,coeff)
         end
@@ -481,15 +434,5 @@ function wicks(mul::Mul)
     end
   end
 
-  return Add(result)
+  return result
 end
-
-
-"""Apply Wicks' theorem"""
-function wicks(mul::Mul)
-end
-
-
-
-
-
