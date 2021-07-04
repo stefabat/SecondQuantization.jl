@@ -4,6 +4,8 @@ import Base.+
 import Base.print
 import Base.eval
 
+abstract type SQObject end
+
 #### Orbital index ####
 
 """Struct representing an orbital index"""
@@ -106,7 +108,7 @@ function latex(op::AnnihilationOperator)
 end
 
 """Union type describing a Fermionic operator"""
-FermionicOperator = Union{CreationOperator,AnnihilationOperator}
+FermionicOperator = Union{CreationOperator,AnnihilationOperator} <: SQObject
 
 get_index(op::FermionicOperator) = get_index(op.index)
 get_class(op::FermionicOperator) = get_class(op.index)
@@ -169,7 +171,7 @@ end
 #### Algebraic rules for Fermionic operators ####
 
 function *(op1::FermionicOperator, op2::FermionicOperator)
-  return Product([op1,op2])
+  return Product(FermionicOperator[op1,op2])
 end
 
 function *(product::Product, op::FermionicOperator)
@@ -347,6 +349,14 @@ mutable struct Contraction
   operators::Vector{FermionicOperator}
 end
 
+# get_coefficient(contr::Contraction) = get_coefficient(contr.operators)
+get_operators(contr::Contraction) = get_operators(contr.operators)
+
+function *(x::Number, contr::Contraction)
+  # coef = x*get_coefficient(contr)
+  ops  = get_operators(contr)
+  return Contraction()
+end
 
 """Applies to quasi-operators"""
 function contraction(op1::CreationOperator, op2::CreationOperator)
@@ -403,15 +413,17 @@ end
 """Apply Wicks' theorem"""
 function wicks(product::Product)
   # vector containing all terms
-  result = Product[]
+  result = Any[]
   push!(result,NO(product))
 
+  operators = get_operators(product)
   # loop over all operators
-  for i=1:length(product.operators)-1
-    for j=i+1:length(product.operators)
+  for i=1:length(product)-1
+    for j=i+1:length(product)
 
       # compute contraction between the two Fermionic operators
-      contracted_pair = contraction(product.operators[i],product.operators[j])
+      # contracted_pair = contraction(operators[i], operators[j])
+      contracted_pair = Contraction(operators[i], operators[j])
 
       sign  = (-1.0)^((j - i + 1) % 2)
       coeff = sign*contracted_pair
